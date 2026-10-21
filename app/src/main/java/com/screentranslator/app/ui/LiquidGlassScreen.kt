@@ -99,8 +99,8 @@ fun LiquidGlassScreen(
                     Box(
                         modifier = Modifier
                             .size(12.dp)
+                            .shadow(elevation = if (isServiceRunning) 8.dp else 0.dp, shape = CircleShape)
                             .background(if (isServiceRunning) NeonCyan else Color.Gray, CircleShape)
-                            .shadow(if (isServiceRunning) 12.dp else 0.dp, NeonCyan)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -142,16 +142,22 @@ fun LiquidGlassScreen(
                 val modes = listOf("Truyện Tranh 📖", "Tin Nhắn 💬")
                 modes.forEach { mode ->
                     val isSelected = selectedMode == mode
-                    Box(
-                        modifier = Modifier
+                    val itemModifier = if (isSelected) {
+                        Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                if (isSelected) Brush.horizontalGradient(listOf(NeonCyan.copy(alpha = 0.8f), NeonPurple.copy(alpha = 0.8f)))
-                                else Color.Transparent
-                            )
+                            .background(Brush.horizontalGradient(listOf(NeonCyan.copy(alpha = 0.8f), NeonPurple.copy(alpha = 0.8f))), RoundedCornerShape(20.dp))
                             .clickable { onModeChanged(mode) }
-                            .padding(vertical = 12.dp),
+                            .padding(vertical = 12.dp)
+                    } else {
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { onModeChanged(mode) }
+                            .padding(vertical = 12.dp)
+                    }
+                    Box(
+                        modifier = itemModifier,
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
