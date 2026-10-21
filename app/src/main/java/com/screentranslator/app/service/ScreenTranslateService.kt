@@ -6,12 +6,12 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.Point
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
@@ -61,24 +61,39 @@ class ScreenTranslateService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        startForegroundNotification()
         setupScreenMetrics()
-        showFloatingBubble()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-        val resultData = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        val resultData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent?.getParcelableExtra(EXTRA_RESULT_DATA)
+        }
         val apiKey = intent?.getStringExtra(EXTRA_API_KEY) ?: ""
 
         if (apiKey.isNotBlank()) {
             translator = SmartAiTranslator(apiKey = apiKey)
         }
 
+        // Start Foreground Service with correct MediaProjection type for Android 14+
+        startForegroundNotification()
+
+        // Initialize MediaProjection after foreground notification is active
         if (resultCode != 0 && resultData != null && mediaProjection == null) {
-            val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
-            setupImageReader()
+            try {
+                val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
+                setupImageReader()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        if (floatingBubbleView == null) {
+            showFloatingBubble()
         }
 
         return START_STICKY
@@ -94,88 +109,96 @@ class ScreenTranslateService : Service() {
     }
 
     private fun setupImageReader() {
-        imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "ScreenCapture",
-            screenWidth,
-            screenHeight,
-            screenDensity,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader?.surface,
-            null,
-            null
-        )
+        try {
+            imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "ScreenCapture",
+                screenWidth,
+                screenHeight,
+                screenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader?.surface,
+                null,
+                null
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun showFloatingBubble() {
-        val bubble = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_search)
-            setBackgroundColor(0xCC2196F3.toInt()) // Semi-transparent blue
-            setPadding(24, 24, 24, 24)
-        }
-
-        val layoutParams = WindowManager.LayoutParams(
-            140,
-            140,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 100
-            y = 300
-        }
-
-        // Drag and click handling
-        bubble.setOnTouchListener(object : View.OnTouchListener {
-            private var initialX = 0
-            private var initialY = 0
-            private var initialTouchX = 0f
-            private var initialTouchY = 0f
-            private var isClick = false
-
-            override fun onTouch(v: View?, event: MotionEvent): Boolean {
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = layoutParams.x
-                        initialY = layoutParams.y
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        isClick = true
-                        return true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = (event.rawX - initialTouchX).toInt()
-                        val dy = (event.rawY - initialTouchY).toInt()
-                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                            isClick = false
-                        }
-                        layoutParams.x = initialX + dx
-                        layoutParams.y = initialY + dy
-                        windowManager.updateViewLayout(bubble, layoutParams)
-                        return true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        if (isClick) {
-                            onBubbleClicked()
-                        }
-                        return true
-                    }
-                }
-                return false
+        try {
+            val bubble = ImageView(this).apply {
+                setImageResource(android.R.drawable.ic_menu_search)
+                setBackgroundColor(0xEE1E88E5.toInt())
+                setPadding(28, 28, 28, 28)
             }
-        })
 
-        floatingBubbleView = bubble
-        windowManager.addView(bubble, layoutParams)
+            val layoutParams = WindowManager.LayoutParams(
+                150,
+                150,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 60
+                y = 400
+            }
+
+            bubble.setOnTouchListener(object : View.OnTouchListener {
+                private var initialX = 0
+                private var initialY = 0
+                private var initialTouchX = 0f
+                private var initialTouchY = 0f
+                private var isClick = false
+
+                override fun onTouch(v: View?, event: MotionEvent): Boolean {
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            initialX = layoutParams.x
+                            initialY = layoutParams.y
+                            initialTouchX = event.rawX
+                            initialTouchY = event.rawY
+                            isClick = true
+                            return true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val dx = (event.rawX - initialTouchX).toInt()
+                            val dy = (event.rawY - initialTouchY).toInt()
+                            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                                isClick = false
+                            }
+                            layoutParams.x = initialX + dx
+                            layoutParams.y = initialY + dy
+                            windowManager.updateViewLayout(bubble, layoutParams)
+                            return true
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            if (isClick) {
+                                onBubbleClicked()
+                            }
+                            return true
+                        }
+                    }
+                    return false
+                }
+            })
+
+            floatingBubbleView = bubble
+            windowManager.addView(bubble, layoutParams)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Chưa cấp quyền 'Hiển thị trên ứng dụng khác'", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun onBubbleClicked() {
         if (resultOverlayView != null) {
-            // Dismiss active translation overlay if already visible
             removeOverlay()
             return
         }
@@ -185,18 +208,16 @@ class ScreenTranslateService : Service() {
         serviceScope.launch {
             val bitmap = captureScreenshot()
             if (bitmap == null) {
-                Toast.makeText(this@ScreenTranslateService, "Không thể chụp màn hình", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@ScreenTranslateService, "Không thể chụp màn hình. Hãy bật lại bong bóng", Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
-            // Step 1: OCR
             val blocks = ocrManager.recognizeText(bitmap, OcrLanguage.LATIN)
             if (blocks.isEmpty()) {
                 Toast.makeText(this@ScreenTranslateService, "Không tìm thấy văn bản nào", Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
-            // Step 2: Smart Translation
             val originalTexts = blocks.map { it.originalText }
             val translatedTexts = translator.translateBatch(originalTexts, targetLang = "Vietnamese", isComicMode = true)
 
@@ -206,7 +227,6 @@ class ScreenTranslateService : Service() {
                 }
             }
 
-            // Step 3: Draw in-place comic translation overlay
             showComicOverlay(blocks)
         }
     }
@@ -248,6 +268,7 @@ class ScreenTranslateService : Service() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
+                @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
@@ -280,19 +301,30 @@ class ScreenTranslateService : Service() {
             .setContentTitle("Screen Translator")
             .setContentText("Bong bóng dịch đang sẵn sàng")
             .setSmallIcon(android.R.drawable.ic_menu_search)
+            .setOngoing(true)
             .build()
 
-        startForeground(101, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                101,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            )
+        } else {
+            startForeground(101, notification)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
-        floatingBubbleView?.let { windowManager.removeView(it) }
+        floatingBubbleView?.let {
+            try { windowManager.removeView(it) } catch (_: Exception) {}
+        }
         removeOverlay()
-        virtualDisplay?.release()
-        imageReader?.close()
-        mediaProjection?.stop()
+        try { virtualDisplay?.release() } catch (_: Exception) {}
+        try { imageReader?.close() } catch (_: Exception) {}
+        try { mediaProjection?.stop() } catch (_: Exception) {}
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -304,10 +336,6 @@ class ScreenTranslateService : Service() {
     }
 }
 
-/**
- * Comic View: covers original speech bubbles with a clean white/dark box
- * and renders translated Vietnamese text directly on top.
- */
 class ComicOverlayView(
     context: Context,
     private val items: List<TextBlockItem>,
@@ -343,7 +371,6 @@ class ComicOverlayView(
         super.onDraw(canvas)
         for (item in items) {
             val box = item.boundingBox
-            // Draw clean background bubble over original text
             canvas.drawRoundRect(
                 box.left.toFloat(),
                 box.top.toFloat(),
@@ -363,7 +390,6 @@ class ComicOverlayView(
                 borderPaint
             )
 
-            // Render translated text
             val text = item.translatedText.ifEmpty { item.originalText }
             canvas.drawText(
                 text,
