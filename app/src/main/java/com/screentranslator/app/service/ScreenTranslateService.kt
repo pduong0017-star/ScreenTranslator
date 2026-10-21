@@ -57,6 +57,7 @@ class ScreenTranslateService : Service() {
 
     private val ocrManager = OcrManager()
     private var translator = SmartAiTranslator()
+    private var isComicMode = true
 
     override fun onCreate() {
         super.onCreate()
@@ -73,6 +74,8 @@ class ScreenTranslateService : Service() {
             intent?.getParcelableExtra(EXTRA_RESULT_DATA)
         }
         val apiKey = intent?.getStringExtra(EXTRA_API_KEY) ?: ""
+        val isComic = intent?.getBooleanExtra(EXTRA_IS_COMIC_MODE, true) ?: true
+        this.isComicMode = isComic
 
         if (apiKey.isNotBlank()) {
             translator = SmartAiTranslator(apiKey = apiKey)
@@ -130,8 +133,10 @@ class ScreenTranslateService : Service() {
         try {
             val bubble = ImageView(this).apply {
                 setImageResource(android.R.drawable.ic_menu_search)
-                setBackgroundColor(0xEE1E88E5.toInt())
-                setPadding(28, 28, 28, 28)
+                setBackgroundResource(com.screentranslator.app.R.drawable.bubble_glass_bg)
+                setColorFilter(Color.WHITE)
+                setPadding(32, 32, 32, 32)
+                elevation = 16f
             }
 
             val layoutParams = WindowManager.LayoutParams(
@@ -333,6 +338,7 @@ class ScreenTranslateService : Service() {
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
         const val EXTRA_API_KEY = "extra_api_key"
+        const val EXTRA_IS_COMIC_MODE = "extra_is_comic_mode"
     }
 }
 
