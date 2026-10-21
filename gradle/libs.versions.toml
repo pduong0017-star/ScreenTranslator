@@ -5,7 +5,7 @@ coreKtx = "1.15.0"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
 composeBom = "2024.11.00"
-mlkitText = "19.0.1"
+mlkitText = "16.0.1"
 mlkitTextChinese = "16.0.1"
 mlkitTextJapanese = "16.0.1"
 mlkitTextKorean = "16.0.1"
@@ -23,7 +23,7 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 
-# ML Kit OCR official maven coordinates (com.google.mlkit:text-recognition:16.0.1)
+# ML Kit OCR official maven coordinates (16.0.1)
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
 mlkit-text-recognition-chinese = { group = "com.google.mlkit", name = "text-recognition-chinese", version.ref = "mlkitTextChinese" }
 mlkit-text-recognition-japanese = { group = "com.google.mlkit", name = "text-recognition-japanese", version.ref = "mlkitTextJapanese" }
